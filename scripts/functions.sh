@@ -7,7 +7,7 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 
 function sync_time() {
 	einfo "Syncing time"
-	try ntpd -g -q
+	try ntpd -q
 
 	einfo "Current date: $(LANG=C date)"
 	einfo "Writing time to hardware clock"
