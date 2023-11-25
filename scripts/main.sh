@@ -13,11 +13,19 @@ function install_stage3() {
 }
 
 function configure_base_system() {
-	einfo "Generating locales"
-	echo "$LOCALES" > /etc/locale.gen \
-		|| die "Could not write /etc/locale.gen"
-	locale-gen \
-		|| die "Could not generate locales"
+	if [[ $MUSL == "true" ]]; then
+		einfo "Installing musl-locales"
+		if [[ $USE_PORTAGE_TESTING == "false" ]]; then
+			echo "sys-apps/musl-locales" >> /etc/portage/package.accept_keywords/musl-locales
+		fi
+		try emerge --verbose sys-apps/musl-locales
+	else
+		einfo "Generating locales"
+		echo "$LOCALES" > /etc/locale.gen \
+			|| die "Could not write /etc/locale.gen"
+		locale-gen \
+			|| die "Could not generate locales"
+	fi
 
 	if [[ $SYSTEMD == "true" ]]; then
 		einfo "Setting machine-id"
@@ -49,12 +57,19 @@ function configure_base_system() {
 			|| die "Could not sed replace in /etc/conf.d/hostname"
 
 		# Set timezone
-		einfo "Selecting timezone"
-		echo "$TIMEZONE" > /etc/timezone \
-			|| die "Could not write /etc/timezone"
-		chmod 644 /etc/timezone \
-			|| die "Could not set correct permissions for /etc/timezone"
-		try emerge -v --config sys-libs/timezone-data
+		if [[ $MUSL == "true" ]]; then
+			try emerge -v sys-libs/timezone-data
+			einfo "Selecting timezone"
+			echo -e "\nTZ=\"$TIMEZONE\"" >> /etc/env.d/00musl \
+				|| die "Could not write to /etc/env.d/00musl"
+		else
+			einfo "Selecting timezone"
+			echo "$TIMEZONE" > /etc/timezone \
+				|| die "Could not write /etc/timezone"
+			chmod 644 /etc/timezone \
+				|| die "Could not set correct permissions for /etc/timezone"
+			try emerge -v --config sys-libs/timezone-data
+		fi
 
 		# Set keymap
 		einfo "Selecting keymap"
@@ -385,7 +400,7 @@ EOF
 	# Install authorized_keys before dracut, which might need them for remote unlocking.
 	install_authorized_keys
 
-	# Install required programs and kernel now, in oder to
+	# Install required programs and kernel now, in order to
 	# prevent emerging module before an imminent kernel upgrade
 	try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel-bin app-arch/zstd
 
