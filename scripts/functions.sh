@@ -7,7 +7,15 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 
 function sync_time() {
 	einfo "Syncing time"
-	try ntpd -g -q
+	if command -v ntpd &> /dev/null; then
+		try ntpd -g -q
+	elif command -v chrony &> /dev/null; then
+		# See https://github.com/oddlama/gentoo-install/pull/122
+		try chronyd -q
+	else
+		# why am I doing this?
+		try date -s "$(curl -sI http://example.com | grep -i ^date: | cut -d' ' -f3-)"
+	fi
 
 	einfo "Current date: $(LANG=C date)"
 	einfo "Writing time to hardware clock"
@@ -818,7 +826,14 @@ function download_stage3() {
 	cd "$TMP_DIR" \
 		|| die "Could not cd into '$TMP_DIR'"
 
-	local STAGE3_RELEASES="$GENTOO_MIRROR/releases/$GENTOO_ARCH/autobuilds/current-$STAGE3_BASENAME/"
+	local STAGE3_BASENAME_FINAL
+	if [[ "$GENTOO_ARCH" == "x86" && -n "$GENTOO_SUBARCH" ]]; then
+		STAGE3_BASENAME_FINAL="$STAGE3_BASENAME_CUSTOM"
+	else
+		STAGE3_BASENAME_FINAL="$STAGE3_BASENAME"
+	fi
+
+	local STAGE3_RELEASES="$GENTOO_MIRROR/releases/$GENTOO_ARCH/autobuilds/current-$STAGE3_BASENAME_FINAL/"
 
 	# Download upstream list of files
 	CURRENT_STAGE3="$(download_stdout "$STAGE3_RELEASES")" \
@@ -826,7 +841,7 @@ function download_stage3() {
 	# Decode urlencoded strings
 	CURRENT_STAGE3=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(sys.stdin.read()))' <<< "$CURRENT_STAGE3")
 	# Parse output for correct filename
-	CURRENT_STAGE3="$(grep -o "\"${STAGE3_BASENAME}-[0-9A-Z]*.tar.xz\"" <<< "$CURRENT_STAGE3" \
+	CURRENT_STAGE3="$(grep -o "\"${STAGE3_BASENAME_FINAL}-[0-9A-Z]*.tar.xz\"" <<< "$CURRENT_STAGE3" \
 		| sort -u | head -1)" \
 		|| die "Could not parse list of tarballs"
 	# Strip quotes
@@ -834,13 +849,13 @@ function download_stage3() {
 	# File to indiciate successful verification
 	CURRENT_STAGE3_VERIFIED="${CURRENT_STAGE3}.verified"
 
-	maybe_exec 'before_download_stage3' "$STAGE3_BASENAME"
+	maybe_exec 'before_download_stage3' "$STAGE3_BASENAME_FINAL"
 
 	# Download file if not already downloaded
 	if [[ -e $CURRENT_STAGE3_VERIFIED ]]; then
-		einfo "$STAGE3_BASENAME tarball already downloaded and verified"
+		einfo "$STAGE3_BASENAME_FINAL tarball already downloaded and verified"
 	else
-		einfo "Downloading $STAGE3_BASENAME tarball"
+		einfo "Downloading $STAGE3_BASENAME_FINAL tarball"
 		download "$STAGE3_RELEASES/${CURRENT_STAGE3}" "${CURRENT_STAGE3}"
 		download "$STAGE3_RELEASES/${CURRENT_STAGE3}.DIGESTS" "${CURRENT_STAGE3}.DIGESTS"
 
