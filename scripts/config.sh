@@ -389,12 +389,13 @@ function create_existing_partitions_layout() {
 # Multiple disks, up to 3 partitions on first disk (efi, optional swap, root with zfs).
 # Additional devices will be added to the zfs pool.
 # Parameters:
-#   swap=<size>                Create a swap partition with given size, or no swap at all if set to false.
-#   type=[efi|bios]            Selects the boot type. Defaults to efi if not given.
-#   encrypt=[true|false]       Encrypt zfs pool. Defaults to false if not given.
-#   pool_type=[stripe|mirror]  Select raid type. Defaults to stripe.
+#   swap=<size>                     Create a swap partition with given size, or no swap at all if set to false.
+#   type=[efi|bios]                 Selects the boot type. Defaults to efi if not given.
+#   encrypt=[true|false]            Encrypt the zfs datasets. Defaults to false if not given.
+#   compress=[false|<compression>]  Compress the zfs datasets. For valid values visit man zfsprops. Defaults to false if not given.
+#   pool_type=[standard|custom]     Select zfs pool type. Custom pools allow you to do the pool creation yourself. Defaults to standard.
 function create_zfs_centric_layout() {
-	local known_arguments=('+swap' '?type' '?pool_type' '?encrypt' '?compress')
+	local known_arguments=('+swap' '?type' '?encrypt' '?compress' '?pool_type')
 	local extra_arguments=()
 	declare -A arguments; parse_arguments "$@"
 
@@ -402,9 +403,9 @@ function create_zfs_centric_layout() {
 		|| die_trace 1 "Expected at least one positional argument (the devices)"
 	local device="${extra_arguments[0]}"
 	local size_swap="${arguments[swap]}"
-	local pool_type="${arguments[pool_type]:-stripe}"
 	local type="${arguments[type]:-efi}"
 	local encrypt="${arguments[encrypt]:-false}"
+	local pool_type="${arguments[pool_type]:-standard}"
 
 	# Create layout on first disk
 	create_gpt new_id="gpt_dev0" device="${extra_arguments[0]}"
@@ -504,7 +505,7 @@ function create_raid0_luks_layout() {
 }
 
 # Multiple disks, with raid 1 and luks
-# - efi:  partition on all disks, but only first disk used
+# - efi:  raid 1 → fs
 # - swap: raid 1 → fs
 # - root: raid 1 → luks → fs
 # Parameters:
@@ -532,6 +533,7 @@ function create_raid1_luks_layout() {
 		create_partition new_id="part_root_dev${i}"    id="gpt_dev${i}" size=remaining    type=raid
 	done
 
+	create_raid new_id="part_raid_${type}" name="$type" level=1 ids="$(expand_ids "^part_${type}_dev[[:digit:]]$")"
 	[[ $size_swap != "false" ]] \
 		&& create_raid new_id=part_raid_swap name="swap" level=1 ids="$(expand_ids '^part_swap_dev[[:digit:]]$')"
 	create_raid new_id=part_raid_root name="root" level=1 ids="$(expand_ids '^part_root_dev[[:digit:]]$')"
@@ -542,15 +544,15 @@ function create_raid1_luks_layout() {
 		root_id="part_luks_root"
 	fi
 
-	format id="part_${type}_dev0" type="$type" label="$type"
+	format id="part_raid_${type}" type="$type" label="$type"
 	[[ $size_swap != "false" ]] \
 		&& format id=part_raid_swap type=swap label=swap
 	format id="$root_id" type="$root_fs" label=root
 
 	if [[ $type == "efi" ]]; then
-		DISK_ID_EFI="part_${type}_dev0"
+		DISK_ID_EFI="part_raid_${type}"
 	else
-		DISK_ID_BIOS="part_${type}_dev0"
+		DISK_ID_BIOS="part_raid_${type}"
 	fi
 	[[ $size_swap != "false" ]] \
 		&& DISK_ID_SWAP=part_raid_swap
@@ -575,7 +577,7 @@ function create_raid1_luks_layout() {
 #   luks=[true|false]          Encrypt root partition and btrfs devices. Defaults to false if not given.
 #   raid_type=[raid0|raid1]    Select raid type. Defaults to raid0.
 function create_btrfs_centric_layout() {
-	local known_arguments=('+swap' '?type' '?raid_type' '?luks')
+	local known_arguments=('+swap' '?type' '?luks' '?raid_type')
 	local extra_arguments=()
 	declare -A arguments; parse_arguments "$@"
 
@@ -583,9 +585,9 @@ function create_btrfs_centric_layout() {
 		|| die_trace 1 "Expected at least one positional argument (the devices)"
 	local device="${extra_arguments[0]}"
 	local size_swap="${arguments[swap]}"
-	local raid_type="${arguments[raid_type]:-raid0}"
 	local type="${arguments[type]:-efi}"
 	local use_luks="${arguments[luks]:-false}"
+	local raid_type="${arguments[raid_type]:-raid0}"
 
 	# Create layout on first disk
 	create_gpt new_id="gpt_dev0" device="${extra_arguments[0]}"
