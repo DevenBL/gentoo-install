@@ -16,6 +16,8 @@ function configure_base_system() {
 	if [[ $MUSL == "true" ]]; then
 		einfo "Installing musl-locales"
 		try emerge --verbose sys-apps/musl-locales
+		echo 'MUSL_LOCPATH="/usr/share/i18n/locales/musl"' >> /etc/env.d/00local \
+			|| die "Could not write to /etc/env.d/00local"
 	else
 		einfo "Generating locales"
 		echo "$LOCALES" > /etc/locale.gen \
@@ -57,7 +59,7 @@ function configure_base_system() {
 		if [[ $MUSL == "true" ]]; then
 			try emerge -v sys-libs/timezone-data
 			einfo "Selecting timezone"
-			echo -e "\nTZ=\"$TIMEZONE\"" >> /etc/env.d/00local \
+			echo -e "TZ=\"$TIMEZONE\"" >> /etc/env.d/00local \
 				|| die "Could not write to /etc/env.d/00local"
 		else
 			einfo "Selecting timezone"
@@ -443,7 +445,13 @@ EOF
 
 	# Install required programs and kernel now, in order to
 	# prevent emerging module before an imminent kernel upgrade
-	try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel-bin app-arch/zstd
+	if [[ "${KERNEL_TYPE:-bin}" == "source" ]]; then
+		einfo "Building kernel from source (sys-kernel/gentoo-kernel)"
+		try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel app-arch/zstd
+	else
+		einfo "Installing binary kernel (sys-kernel/gentoo-kernel-bin)"
+		try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel-bin app-arch/zstd
+	fi
 
 	# Install cryptsetup if we used LUKS
 	if [[ $USED_LUKS == "true" ]]; then

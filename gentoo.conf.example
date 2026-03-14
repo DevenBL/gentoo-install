@@ -252,7 +252,7 @@ PORTAGE_GIT_FULL_HISTORY=false
 PORTAGE_GIT_MIRROR="https://anongit.gentoo.org/git/repo/sync/gentoo.git"
 
 # The selected gentoo mirror
-GENTOO_MIRROR="https://mirror.eu.oneandone.net/linux/distributions/gentoo/gentoo"
+GENTOO_MIRROR="https://mirror.leaseweb.com/gentoo"
 #GENTOO_MIRROR="https://distfiles.gentoo.org"
 
 # The architecture of the target system (only tested with amd64)
@@ -300,6 +300,11 @@ ENABLE_SSHD=true
 
 # Enable binary portage packages where available
 ENABLE_BINPKG=false
+
+# Kernel type to install:
+#   "bin"    - Install pre-built binary kernel (sys-kernel/gentoo-kernel-bin) [default]
+#   "source" - Build kernel from source (sys-kernel/gentoo-kernel)
+KERNEL_TYPE=bin
 
 # An ssh key to add to the authorized_keys file for the root user.
 # This variable will become the content of the authorized_keys file,
