@@ -1,6 +1,9 @@
 #!/bin/bash
 set -uo pipefail
 
+#A very dumb cludge fix for https://github.com/oddlama/gentoo-install/issues/153
+export DEBUGINFOD_URLS="http://foo.mynet.local/debuginfo https://debuginfod.elfutils.org/" 
+export DEBUGINFOD_IMA_CERT_PATH="/etc/certs" 
 
 ################################################
 # Initialize script environment
